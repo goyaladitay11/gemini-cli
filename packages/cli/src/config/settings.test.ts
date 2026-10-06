@@ -2274,6 +2274,69 @@ describe('Settings Loading and Merging', () => {
         process.argv = originalArgv;
       }
     });
+
+    it('does not load execution-affecting GIT_* variables from project .env files', () => {
+      delete process.env['SAFE_PROJECT_VAR'];
+      delete process.env['GIT_EXEC_PATH'];
+      const workspaceEnvPath = path.resolve(
+        path.join(MOCK_WORKSPACE_DIR, '.env'),
+      );
+      vi.spyOn(trustedFolders, 'isWorkspaceTrusted').mockReturnValue({
+        isTrusted: true,
+        source: 'file',
+      });
+      (mockFsExistsSync as Mock).mockImplementation((p: fs.PathLike) => {
+        const normalizedP = path.resolve(p.toString());
+        return (
+          normalizedP === workspaceEnvPath ||
+          normalizedP === path.resolve(USER_SETTINGS_PATH)
+        );
+      });
+      (fs.readFileSync as Mock).mockImplementation(
+        (p: fs.PathOrFileDescriptor) => {
+          const normalizedP = path.resolve(p.toString());
+          if (normalizedP === workspaceEnvPath) {
+            return [
+              'GIT_EXEC_PATH=/tmp/evil',
+              'GIT_SSH_COMMAND=calc.exe',
+              'GIT_PROXY_COMMAND=cmd /c calc.exe',
+              'GIT_SSH_VARIANT=ssh',
+              'GIT_EXTERNAL_DIFF=/tmp/evil-diff',
+              'GIT_ALLOW_PROTOCOL=evil',
+              'GIT_PROTOCOL_FROM_USER=1',
+              'GIT_ALTERNATE_OBJECT_DIRECTORIES=/tmp/evil-objects',
+              'GIT_TEMPLATE_DIR=/tmp/evil-template',
+              'GIT_REPLACE_REF_BASE=refs/evil',
+              'GIT_CEILING_DIRECTORIES=/tmp/evil-ceiling',
+              'GIT_CONFIG_PARAMETERS=core.sshCommand=calc.exe',
+              'SAFE_PROJECT_VAR=safe-value',
+            ].join('\n');
+          }
+          return '{}';
+        },
+      );
+
+      const settings = {
+        security: { folderTrust: { enabled: false } },
+      } as Settings;
+      loadEnvironment(settings, MOCK_WORKSPACE_DIR, isWorkspaceTrusted);
+
+      expect(process.env['SAFE_PROJECT_VAR']).toBe('safe-value');
+      expect(process.env['GIT_EXEC_PATH']).toBeUndefined();
+      expect(process.env['GIT_SSH_COMMAND']).toBeUndefined();
+      expect(process.env['GIT_PROXY_COMMAND']).toBeUndefined();
+      expect(process.env['GIT_SSH_VARIANT']).toBeUndefined();
+      expect(process.env['GIT_EXTERNAL_DIFF']).toBeUndefined();
+      expect(process.env['GIT_ALLOW_PROTOCOL']).toBeUndefined();
+      expect(process.env['GIT_PROTOCOL_FROM_USER']).toBeUndefined();
+      expect(process.env['GIT_ALTERNATE_OBJECT_DIRECTORIES']).toBeUndefined();
+      expect(process.env['GIT_TEMPLATE_DIR']).toBeUndefined();
+      expect(process.env['GIT_REPLACE_REF_BASE']).toBeUndefined();
+      expect(process.env['GIT_CEILING_DIRECTORIES']).toBeUndefined();
+      expect(process.env['GIT_CONFIG_PARAMETERS']).toBeUndefined();
+
+      delete process.env['SAFE_PROJECT_VAR'];
+    });
   });
 
   describe('migrateDeprecatedSettings', () => {

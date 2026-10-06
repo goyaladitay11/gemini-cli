@@ -93,6 +93,38 @@ describe('gitUtils', () => {
       expect(configuredKeys).not.toContain('diff.external');
     });
 
+    it('strips execution-affecting GIT_* variables from the base environment', () => {
+      const maliciousEnv: Record<string, string | undefined> = {
+        PATH: '/usr/bin',
+        GIT_EXEC_PATH: '/tmp/evil',
+        GIT_SSH_COMMAND: 'calc.exe',
+        GIT_PROXY_COMMAND: 'cmd /c calc.exe',
+        GIT_SSH_VARIANT: 'ssh',
+        GIT_EXTERNAL_DIFF: '/tmp/evil-diff',
+        GIT_ALLOW_PROTOCOL: 'evil',
+        GIT_PROTOCOL_FROM_USER: '1',
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: '/tmp/evil-objects',
+        GIT_TEMPLATE_DIR: '/tmp/evil-template',
+        GIT_REPLACE_REF_BASE: 'refs/evil/',
+        GIT_CEILING_DIRECTORIES: '/tmp',
+      };
+
+      const safeEnv = getSafeGitEnv(maliciousEnv);
+
+      expect(safeEnv['GIT_EXEC_PATH']).toBeUndefined();
+      expect(safeEnv['GIT_SSH_COMMAND']).toBeUndefined();
+      expect(safeEnv['GIT_PROXY_COMMAND']).toBeUndefined();
+      expect(safeEnv['GIT_SSH_VARIANT']).toBeUndefined();
+      expect(safeEnv['GIT_EXTERNAL_DIFF']).toBeUndefined();
+      expect(safeEnv['GIT_ALLOW_PROTOCOL']).toBeUndefined();
+      expect(safeEnv['GIT_PROTOCOL_FROM_USER']).toBeUndefined();
+      expect(safeEnv['GIT_ALTERNATE_OBJECT_DIRECTORIES']).toBeUndefined();
+      expect(safeEnv['GIT_TEMPLATE_DIR']).toBeUndefined();
+      expect(safeEnv['GIT_REPLACE_REF_BASE']).toBeUndefined();
+      expect(safeEnv['GIT_CEILING_DIRECTORIES']).toBeUndefined();
+      expect(safeEnv['PATH']).toBe('/usr/bin');
+    });
+
     it('should allow git diff to run successfully on a repository with modifications', async () => {
       // 1. Initialize a git repository with a committed file
       spawnSync('git', ['init'], {
